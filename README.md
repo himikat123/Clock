@@ -1,4 +1,4 @@
-# Clock
+# Clock BIM
 Clock based on ESP8266 and TM1637
 
 
