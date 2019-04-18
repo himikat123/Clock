@@ -1,0 +1,55 @@
+String fw="1.0";
+String vers="BIM v"+fw;
+int rssi=0;
+File fsUploadFile;
+char ssid[32]="";
+char password[32]="";
+char text_buf[255]="";
+String httpData="";
+bool bme1Detected=false;
+bool bme2Detected=false;
+bool shtDetected=false;
+uint8_t dsDetected=0;
+int sec=0;
+float temp=0;
+float hum=0;
+
+struct{
+  uint8_t num=0;
+  String ssid[10];
+  String pass[10];
+} ssids;
+
+struct html_structure{
+  char        ap_ssid[32]="Clock";
+  char        ap_pass[32]="1234567890";
+  String      ap_ip="192.168.4.1";
+  String      ap_mask="255.255.255.0";
+  int         chnl=1;
+  int         hide=0;
+  int8_t      zone=0;
+  uint8_t     adj=0;
+  uint8_t     lang=0;
+  uint8_t     timef=0;
+  int         bright=0;
+  int         bright_n=0;
+  int         typ=0;
+  String      ip="";
+  String      mask="";
+  String      gateway="";
+  String      dns1="";
+  String      dns2="";
+  int         temp=0;
+  int         hum=0;
+  float       t_cor=0;
+  float       h_cor=0;
+  bool        ti_units=false;
+  String      mdns="clock";
+  int         fh=0;
+  int         fm=0;
+  int         th=0;
+  int         tm=0;
+  int         every=0;
+  int         duration=0;
+};
+html_structure html;
