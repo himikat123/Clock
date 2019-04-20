@@ -60,6 +60,8 @@ void setup(){
   tm1637.set(5);
   tm1637.display(TimeDisp);
   tm1637.set(5);
+    //i2c
+  Wire.pins(ONE_WIRE_BUS,BUTTON);
     //Serial port
   Serial.begin(74880);
   while(!Serial);
@@ -366,9 +368,11 @@ void siteTime(){
   url+="&l="; url+=html.lang;
   HTTPClient client;
   client.begin(url);
+  Serial.println(url);
   int httpCode=client.GET();
   if(httpCode==HTTP_CODE_OK){
     httpData=client.getString();
+    Serial.println(httpData);
     char stamp[12];
     httpData.toCharArray(stamp,12);
     int dayLight=0;
