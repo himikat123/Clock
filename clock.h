@@ -1,4 +1,4 @@
-String fw="1.0";
+String fw="1.1";
 String vers="BIM v"+fw;
 int rssi=0;
 File fsUploadFile;
@@ -6,6 +6,7 @@ char ssid[32]="";
 char password[32]="";
 char text_buf[255]="";
 String httpData="";
+bool ds3231Detected=false;
 bool bme1Detected=false;
 bool bme2Detected=false;
 bool shtDetected=false;
@@ -13,6 +14,11 @@ uint8_t dsDetected=0;
 int sec=0;
 float temp=0;
 float hum=0;
+uint8_t rtcUpd=0;
+bool tmUpd=true;
+bool showTime=true;
+bool tempS;
+bool humS;
 
 struct{
   uint8_t num=0;
@@ -51,5 +57,6 @@ struct html_structure{
   int         tm=0;
   int         every=0;
   int         duration=0;
+  String      ntp="time.windows.com";
 };
 html_structure html;

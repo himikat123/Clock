@@ -164,8 +164,8 @@ void web_settings(void){
   });
 
   webServer.on("/esp/mac_ip.php",HTTP_POST,[](){
-    String json="{\"mac\":\""; json+=WiFi.macAddress();           json+="\",";
-    json+="\"ip\":\"";         json+=WiFi.softAPIP().toString();  json+="\"}";
+    String json="{\"mac\":\""; json+=WiFi.macAddress();          json+="\",";
+    json+="\"ip\":\"";         json+=WiFi.softAPIP().toString(); json+="\"}";
     webServer.send(200,"text/plain",json);
   });
 
@@ -192,6 +192,7 @@ void web_settings(void){
       case 1: json+="BME280\","; break;
       case 2: json+="SHT21\","; break;
       case 3: json+="DS18B20\","; break;
+      case 4: json+="DS3231\","; break;
       default: json+="\","; break;
     }
     json+="\"hum\":\""; json+=(h==true)?"--":String(hum); json+="\","; 

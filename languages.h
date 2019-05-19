@@ -17,7 +17,7 @@ struct saved_text saved[10]={
   "Nu este salvat",
   "Parola veche nevalidă",
 
-  "Gerettet",
+  "Gespeichert",
   "Nicht gespeichert",
   "Ungültiges altes Passwort",
 

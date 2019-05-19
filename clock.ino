@@ -1,4 +1,4 @@
-/* Clock BIM v1.0
+/* Clock BIM v1.1
  * © Alexandru Piteli himikat123@gmail.com, Nürnberg, Deutschland, 2019 
  * http://esp8266.atwebpages.com/?p=clock
  */
@@ -12,6 +12,7 @@
 #include "TM1637.h"
 #include <Time.h>
 #include <NtpClientLib.h>
+#include <DS3231.h>
 #include <FS.h>
 #include <ESP8266mDNS.h>
 #include <Ticker.h>
@@ -23,10 +24,11 @@
 #include "SHT21.h"
 
 #define site "http://esp8266.atwebpages.com/api/"
-#define CLK         14
-#define DIO         12
-#define ONE_WIRE_BUS 2
-#define BUTTON       0
+#define CLK           14
+#define DIO           12
+#define ONE_WIRE_BUS  2
+#define BUTTON        0
+#define CLOCK_ADDRESS 0x68 
 
 extern "C"{
   #include "clock.h"
@@ -37,6 +39,7 @@ ESP8266WebServer webServer(80);
 TM1637 tm1637(CLK,DIO);
 Ticker half_sec;
 ntpClient *ntp;
+DS3231 Clock;
 BlueDot_BME280 bme1;
 BlueDot_BME280 bme2;
 OneWire oneWire(ONE_WIRE_BUS);
@@ -50,68 +53,91 @@ bool upd=true;
 
 void half(){
   upd=true;
+  rtcUpd++;
   clockPoint=!clockPoint;
   sec--;
+  if(showTime){
+    if(ds3231Detected) d_rtc();
+    else d_time();
+  }
+  tm1637.display(TimeDisp);
 }
 
 void setup(){
-    //Display
-  tm1637.init();
-  tm1637.set(5);
-  tm1637.display(TimeDisp);
-  tm1637.set(5);
-    //i2c
-  Wire.pins(ONE_WIRE_BUS,BUTTON);
     //Serial port
   Serial.begin(74880);
   while(!Serial);
-    //SPIFS
-  if(!SPIFFS.begin()) while(1) yield();
     //PINs
   pinMode(BUTTON,INPUT);
-    //WIFI MODE
-  WiFi.mode(WIFI_STA);
+  pinMode(ONE_WIRE_BUS,INPUT);
+    //i2c
+  Wire.pins(ONE_WIRE_BUS,BUTTON);
+    //SPIFS
+  if(!SPIFFS.begin()) while(1) yield();
     //EEPROM 
   read_eeprom();
+    //sensors
+  sensors_init();
     //Ticker
   half_sec.attach_ms(500,half);
+    //Display
+  tm1637.init();
+  tm1637.set(5);
+    //WIFI MODE
+  WiFi.mode(WIFI_STA);
     //Settings
   is_settings();
   web_settings();
-    //sensors
-  sensors_init();
     //NTP
-  ntp=ntpClient::getInstance("time.windows.com",1);
+  ntp=ntpClient::getInstance(html.ntp,1);
   ntp->setInterval(15,1800);
   ntp->setTimeZone(html.zone);
   ntp->setDayLight(html.adj);
-  ntp->begin();
-  siteTime();
     //MDNS
   html.mdns.toCharArray(text_buf,(html.mdns.length())+1);
   MDNS.begin(text_buf);
   MDNS.addService("http","tcp",80);
+    //Get sensors
+  tempS=get_temp();
+  humS=get_humidity();
 }
   
-void loop(){
+void loop(){ 
   if(upd){
-    if(WiFi.status()!=WL_CONNECTED) connectToWiFi();
-    if(sec-html.duration*2<=0){
-      if(sec>html.duration){
-        bool t=get_temp();
-        d_temp(round(temp),t);
-      }
-      else{
-        bool h=get_humidity();
-        d_hum(round(hum),h);
-      }
-      if(sec<=0) sec=html.duration*2+html.every*2;
+    if(WiFi.status()!=WL_CONNECTED){
+      connectToWiFi();
+      showTime=true;
     }
     else{
-      d_time();
+      if((rtcUpd>120) and (hour()!=0)){
+        
+      }
+      if(tmUpd){
+        siteTime();
+        tmUpd=false;
+        ntp->begin();
+        Clock.setHour(hour());
+        Clock.setMinute(minute());
+        Clock.setSecond(second());
+      }
     }
+    if(sec-html.duration*2<=0){
+      if(sec>=html.duration+1){
+        if(html.temp>0) d_temp(round(temp),tempS);
+        else d_hum(round(hum),humS);
+      }
+      else{
+        if(html.hum>0) d_hum(round(hum),humS);
+        else d_temp(round(temp),tempS);
+      }
+      if(sec<=0){
+        sec=html.every*2;
+        tempS=get_temp();
+        humS=get_humidity();
+      }
+    }
+    else showTime=true;
     upd=false;
-    tm1637.display(TimeDisp);
     tmElements_t from={0,html.fm,html.fh,weekday(),day(),month(),year()-1970};
     uint32_t fromT=makeTime(from);
     tmElements_t to={0,html.tm,html.th,weekday(),day(),month(),year()-1970};
@@ -124,7 +150,8 @@ void loop(){
 }
 
 void d_temp(uint8_t t,bool e){
-  if(e) d_time();
+  showTime=false;
+  if(e) showTime=true;
   else{
     tm1637.point(POINT_OFF);
     if(html.ti_units) t=t*1.8+32;
@@ -136,7 +163,8 @@ void d_temp(uint8_t t,bool e){
 }
 
 void d_hum(uint8_t h,bool e){
-  if(e) d_time();
+  showTime=false;
+  if(e) showTime=true;
   else{
     tm1637.point(POINT_OFF);
     TimeDisp[0]=h/10%10;
@@ -153,6 +181,16 @@ void d_time(){
   TimeDisp[1]=html.timef?hour()%10:hourFormat12()%10;
   TimeDisp[2]=minute()/10;
   TimeDisp[3]=minute()%10;  
+}
+
+void d_rtc(){
+  bool a,b;
+  if(clockPoint) tm1637.point(POINT_ON);
+  else tm1637.point(POINT_OFF);
+  TimeDisp[0]=Clock.getHour(a,b)<10?0x0E:Clock.getHour(a,b)/10;
+  TimeDisp[1]=Clock.getHour(a,b)%10;
+  TimeDisp[2]=Clock.getMinute()/10;
+  TimeDisp[3]=Clock.getMinute()%10;  
 }
 
 void read_eeprom(){
@@ -194,12 +232,14 @@ void read_eeprom(){
       html.tm       =root["TM"];
       html.every    =root["EVERY"];
       html.duration =root["DURAT"];
+      String ntp    =root["NTP"];
       html.ip       =ip;
       html.mask     =mask;
       html.gateway  =gw;
       html.dns1     =dns1;
       html.dns2     =dns2;
       sec           =html.every;
+      html.ntp      =ntp;  
       if(ap_ssid!="") ap_ssid.toCharArray(html.ap_ssid,(ap_ssid.length())+1);
       if(ap_pass!="") ap_pass.toCharArray(html.ap_pass,(ap_pass.length())+1);
       if(ap_ip!="") html.ap_ip=ap_ip;
@@ -228,6 +268,7 @@ void is_settings(void){
   if(!digitalRead(BUTTON)){
     Serial.println("*********************************");
     Serial.println("entering settings mode");
+    showTime=false;
     TimeDisp[0]=0x05;
     TimeDisp[1]=0x0B;
     TimeDisp[2]=0x0F;
@@ -257,6 +298,7 @@ void is_settings(void){
 void connectToWiFi(void){
   is_settings();
   if(!ssids.num){
+    showTime=false;
     TimeDisp[0]=0x05;
     TimeDisp[1]=0x0B;
     TimeDisp[2]=0x0F;
@@ -308,7 +350,7 @@ void connectToWiFi(void){
           }
           Serial.print("Unable to connect to "); Serial.println(ssid);
           is_settings();
-          delay(20000);
+          delay(2000);
         }
         delay(500);
         is_settings();
@@ -368,11 +410,9 @@ void siteTime(){
   url+="&l="; url+=html.lang;
   HTTPClient client;
   client.begin(url);
-  Serial.println(url);
   int httpCode=client.GET();
   if(httpCode==HTTP_CODE_OK){
     httpData=client.getString();
-    Serial.println(httpData);
     char stamp[12];
     httpData.toCharArray(stamp,12);
     int dayLight=0;
@@ -425,14 +465,16 @@ void sensors_init(void){
     Wire.read();
     shtDetected=true;
   }
-  if(bme1Detected) Serial.println("BME1 detected");
-  else Serial.println("BME1 not detected");
-  if(bme2Detected) Serial.println("BME2 detected");
-  else Serial.println("BME2 not detected");
-  if(dsDetected) Serial.println("DS18 detected");
-  else Serial.println("DS18 not detected");
-  if(shtDetected) Serial.println("SHT detected");
-  else Serial.println("SHT not detected");
+    //DS3231
+  bool a,b;
+  byte c=Clock.getHour(a,b);
+  if(c>=0 and c<=23) ds3231Detected=true;
+  Serial.println(c);
+  Serial.printf("%s %s%s\r\n","DS3231",ds3231Detected?"":"not ","detected");
+  Serial.printf("%s %s%s\r\n","BME280(0x76)",bme1Detected?"":"not ","detected");
+  Serial.printf("%s %s%s\r\n","BME280(0x77)",bme2Detected?"":"not ","detected");
+  Serial.printf("%s %s%s\r\n","DS18B20",dsDetected?"":"not ","detected");
+  Serial.printf("%s %s%s\r\n","SHT21",shtDetected?"":"not ","detected");
 }
 
 bool get_temp(void){
@@ -459,6 +501,12 @@ bool get_temp(void){
       err=false;
     }
     sensors.requestTemperatures();
+  }
+  if(html.temp==4){
+    if(ds3231Detected){
+      temp=Clock.getTemperature();
+      err=false;
+    }
   }
   temp+=html.t_cor;
   return err; 
