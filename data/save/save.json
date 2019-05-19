@@ -28,5 +28,6 @@
   "TH":21,
   "TM":0,
   "EVERY":20,
-  "DURAT":6
+  "DURAT":6,
+  "NTP":"time.windows.com"
 }
