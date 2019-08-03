@@ -59,3 +59,11 @@ You can power the clock by any charger from the mobile phone with a voltage of <
 <hr>
 After assembly and flashing the clock needs to be set up. When you first turn on the clock themselves enter the settings mode. In the future to enter the settings press and hold the <b>SETTINGS</b> button until the display shows <b>"SEtt"</b>. Connect your laptop or smartphone to the network <b>Clock</b> password is <b>1234567890</b> and in the browser go to <b>http://192.168.4.1</b> address.
 The default username is <b>admin</b> the password is <b>1111</b>.
+<p align="center">
+  <img src="./img/login.png" align="center"
+     title="WiFi clock BIM Login" width="460">
+</p>
+<p align="center">
+  <img src="./img/sett.png" align="center"
+     title="WiFi clock BIM Settings" width="460">
+</p>
