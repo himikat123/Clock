@@ -1,29 +1,19 @@
 # Very simple WiFi clock based on ESP8266 and TM1637
-<p align="center"> ## Clock BIM
-
+## Clock BIM
+<p align="center">
   <img src="./img/clock2.jpg" align="center"
      title="WiFi clock BIM" width="450">
 </p>
-Минимум деталей. 2 модуля и 7 SMD деталей.
 
-Прошивка без программатора и без необходимости что-то компилировать.
-
-Точный ход часов, при наличии доступа в интернет. Благодаря синхронизации с NTP сервером.
-
-Автоматический переход на летнее время, только если нужно.
-
-Пониженая яркость дисплея в ночном режиме.
-
-Возможность задания времени и яркости ночного и дневного режима.
-
-Отображение температуры и влажности в доме.
-
-Возможность коррекции показаний температуры и влажности.
-
-Автоподключение к одной из 10-и сохраненных в памяти часов WiFi сетей.
-
-Дистанционный доступ к настройкам часов.
-
-Простые и понятные даже неподготовленному человеку настройки.
-
-Возможность обновления прошивки по воздуху.
+Minimum details. 3 modules and 7 SMD components.
+The clock keep good time with Internet access. Thanks to synchronization with NTP server.
+Automatic daylight saving time only if needed.
+Decreased display brightness in night mode.
+Ability to set the time and brightness of night and day mode.
+Display the temperature and humidity in the house.
+The possibility of correction of temperature and humidity.
+Automatic connection to one of the 10 WiFi saved networks.
+Remote access to the settings of the clock.
+Simple and understandable even to an unprepared person settings.
+Ability to update the firmware over the air.
+The settings interface is available in 9 languages: English, Russian, Romanian, German, Estonian, Ukrainian, Azerbaijani, Belarusian and Bulgarian.
