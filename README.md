@@ -1,9 +1,9 @@
 # Very simple WiFi clock based on ESP8266 and TM1637
 ## Clock BIM
-
-<img src="./img/clock2.jpg" align="center"
-     title="WiFi clock BIM" width="320">
-
+<p align="center">
+  <img src="./img/clock2.jpg" align="center"
+     title="WiFi clock BIM" width="450">
+</p>
 Минимум деталей. 2 модуля и 7 SMD деталей.
 
 Прошивка без программатора и без необходимости что-то компилировать.
