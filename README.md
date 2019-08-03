@@ -50,7 +50,7 @@ You can power the clock by any charger from the mobile phone with a voltage of <
      title="PCB for WiFi clock BIM" width="460">
 </p>
 <hr>
-<a href="https://www.youtube.com/watch?v=i8bDxqybWVA&feature=youtu.be" target="blank">
+<a href="https://www.youtube.com/watch?v=i8bDxqybWVA&feature=youtu.be" target="_blank">
   <p align="center">
     <img src="./img/youtube.png" align="center"
      title="WiFi clock BIM in youtube" width="640">
