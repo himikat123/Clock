@@ -61,9 +61,9 @@ After assembly and flashing the clock needs to be set up. When you first turn on
 The default username is <b>admin</b> the password is <b>1111</b>.
 <p align="center">
   <img src="./img/login.png" align="center"
-     title="WiFi clock BIM Login" width="460">
+     title="WiFi clock BIM Login" width="640">
 </p>
 <p align="center">
   <img src="./img/sett.png" align="center"
-     title="WiFi clock BIM Settings" width="460">
+     title="WiFi clock BIM Settings" width="640">
 </p>
