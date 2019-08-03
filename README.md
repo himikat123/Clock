@@ -46,12 +46,10 @@ The clock supports the following sensors: <b>DS18B20</b>, <b>BME280</b> and <b>S
 You can power the clock by any charger from the mobile phone with a voltage of <b>5V</b> rated for a current of at least <b>0.5A</b> with a <b>micro USB</b> connector.
 <hr>
 <p align="center">
-  <img src="./pcb/clock_pcb_v1.1.png" align="center"
-     title="PCB for WiFi clock BIM" width="320">
+  <img src="./img/clock_pcb_v1.1.png" align="center"
+     title="PCB for WiFi clock BIM" width="680">
 </p>
-<div class=w3-center>3d модель платы, можно вращать, приближать.<br>
-  <div class="sketchfab-embed-wrapper">
-    <iframe width="640" height="480" src="https://sketchfab.com/models/cf547d90a83749b79a8566f0bf66dbea/embed?autospin=0.2&amp;autostart=1&amp;preload=1" frameborder="0" allow="autoplay; fullscreen; vr" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>
-    <p style="font-size: 13px; font-weight: normal; margin: 5px; color: #4A4A4A;"></p>
-  </div>
+<div class="sketchfab-embed-wrapper">
+  <iframe width="640" height="480" src="https://sketchfab.com/models/cf547d90a83749b79a8566f0bf66dbea/embed?autospin=0.2&amp;autostart=1&amp;preload=1" frameborder="0" allow="autoplay; fullscreen; vr" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>
+  <p style="font-size: 13px; font-weight: normal; margin: 5px; color: #4A4A4A;"></p>
 </div>
