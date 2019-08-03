@@ -2,7 +2,7 @@
 ## Clock BIM
 
 <img src="./img/clock2.jpg" align="center"
-     title="WiFi clock BIM">
+     title="WiFi clock BIM" width="320">
 
 Минимум деталей. 2 модуля и 7 SMD деталей.
 
