@@ -43,4 +43,4 @@ Resistors **R1** and **R2** as well as the diode **D1** are used to protect the 
 <hr>
 The clock supports the following sensors: **DS18B20**, **BME280** and **SHT21 (HTU21D)**. You can connect one or all the sensors together. In the settings you can choose which sensor what to measure. The sensors are connected to connector **J1**, the pin assignment is shown in the schematics diagram.
 <hr>
-You can power the clock by any charger from the mobile phone with a voltage of **5V** rated for a current of at least **0.5A** with a **micro USB** connector.
+You can power the clock by any charger from the mobile phone with a voltage of <b>5V</b> rated for a current of at least <b>0.5A</b> with a <b>micro USB</b> connector.
