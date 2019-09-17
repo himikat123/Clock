@@ -1,6 +1,6 @@
 /* Clock BIM v1.1
  * © himikat123@gmail.com, Nürnberg, Deutschland, 2019 
- * http://esp8266.atwebpages.com/?p=clock
+ * https://github.com/himikat123/Clock
  */
                                // Board: Generic ESP8266 Module 
                                // 1MB (256kB SPIFFS)
