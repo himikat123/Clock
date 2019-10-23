@@ -20,7 +20,7 @@
 
 ## Schematics diagram
 <p align="center">
-  <img src="./schematic/clock_v2.0.gif" align="center"
+  <img src="./schematic/clock_v2.0.png" align="center"
      title="WiFi clock BIM schematics" width="680">
 </p>
 
