@@ -70,6 +70,8 @@ void handleFileUpload(){
   }
 }
 
+String notFound="<html><head><title>HTTP 404 - File Not Found</title></head><body style=\"font-family:Arial;font-size:14px\"><h2>The page cannot be found!</h2><br>The page you have requested cannot be found in ESP8266's memory.<br><br>HTTP 404 - File Not Found</body></html>";
+
 void web_settings(void){
   webServer.on("/esp/save.php",HTTP_POST,[](){
     if(webServer.arg("JS")!=""){
@@ -77,9 +79,9 @@ void web_settings(void){
       if(file){
         file.print(webServer.arg("JS"));
         file.close();
-        webServer.send(200,"text/plain",saved[html.lang].saved);
+        webServer.send(200,"text/plain",saved[config.lang].saved);
       }
-      else webServer.send(200,"text/plain",saved[html.lang].not_saved);
+      else webServer.send(200,"text/plain",saved[config.lang].not_saved);
     }
     if(webServer.arg("JSSIDS")!=""){  
       File file=SPIFFS.open("/save/jssids.json","w");
@@ -118,49 +120,61 @@ void web_settings(void){
   });
 
   webServer.on("/esp/lang.php",HTTP_POST,[](){
-    html.lang=(webServer.arg("LANG").toInt());
+    config.lang=(webServer.arg("LANG").toInt());
     webServer.send(200,"text/plain","OK");
   });
 
   webServer.on("/esp/temp.php",HTTP_POST,[](){
-    html.temp=webServer.arg("SENSOR").toInt();
+    config.temp=webServer.arg("SENSOR").toInt();
     webServer.send(200,"text/plain","OK");
   });
 
   webServer.on("/esp/hum.php",HTTP_POST,[](){
-    html.hum=webServer.arg("SENSOR").toInt();
+    config.hum=webServer.arg("SENSOR").toInt();
+    webServer.send(200,"text/plain","OK");
+  });
+
+  webServer.on("/esp/pres.php",HTTP_POST,[](){
+    config.pres=webServer.arg("SENSOR").toInt();
     webServer.send(200,"text/plain","OK");
   });
 
   webServer.on("/esp/tcor.php",HTTP_POST,[](){
-    html.t_cor=webServer.arg("COR").toFloat();
+    config.t_cor=webServer.arg("COR").toFloat();
     webServer.send(200,"text/plain","OK");
   });
 
   webServer.on("/esp/hcor.php",HTTP_POST,[](){
-    html.h_cor=webServer.arg("COR").toFloat();
+    config.h_cor=webServer.arg("COR").toFloat();
+    webServer.send(200,"text/plain","OK");
+  });
+
+  webServer.on("/esp/pcor.php",HTTP_POST,[](){
+    config.p_cor=webServer.arg("COR").toFloat();
     webServer.send(200,"text/plain","OK");
   });
   
   webServer.on("/esp/br.php",HTTP_POST,[](){
     int bright=webServer.arg("BR").toInt();
-    tm1637.set(bright);
+    tm1637_6D.set(bright);
     webServer.send(200,"text/plain",String(bright));
   });
 
   webServer.on("/esp/br_n.php",HTTP_POST,[](){
     int bright=webServer.arg("BR_N").toInt();
-    tm1637.set(bright);
+    tm1637_6D.set(bright);
     webServer.send(200,"text/plain",String(bright));
   });
 
   webServer.on("/esp/data.php",HTTP_POST,[](){
     bool t=get_temp();
     bool h=get_humidity();
+    bool p=get_pres();
     String json="{\"t\":"; json+=(t==true)?"\"--\"":String(temp); json+=",";
-    json+="\"h\":"; json+=(h==true)?"\"--\"":String(hum); json+="}";
+    json+="\"h\":"; json+=(h==true)?"\"--\"":String(hum); json+=",";
+    json+="\"p\":"; json+=(p==true)?"\"--\"":String(pres); json+="}";
     webServer.send(200,"text/plain",json);
-    if(html.temp==3) sensors.requestTemperatures();
+    if(config.temp==3) sensors.requestTemperatures();
   });
 
   webServer.on("/esp/mac_ip.php",HTTP_POST,[](){
@@ -179,6 +193,7 @@ void web_settings(void){
   webServer.on("/esp/status.php",HTTP_POST,[](){
     bool t=get_temp();
     bool h=get_humidity();
+    bool p=get_pres();
     String json="{\"fw\":\""; json+="v"+fw;                      json+="\",";
     json+="\"ssid\":\"";      json+=WiFi.SSID();                 json+="\",";
     json+="\"ch\":\"";        json+=WiFi.channel();              json+="\",";
@@ -187,7 +202,7 @@ void web_settings(void){
     json+="\"ip\":\"";        json+=WiFi.localIP().toString();   json+="\",";
     json+="\"temp\":\"";      json+=(t==true)?"--":String(temp); json+="\",";
     json+="\"t\":\"";
-    switch(html.temp){
+    switch(config.temp){
       case 0: json+="\","; break;
       case 1: json+="BME280\","; break;
       case 2: json+="SHT21\","; break;
@@ -197,17 +212,24 @@ void web_settings(void){
     }
     json+="\"hum\":\""; json+=(h==true)?"--":String(hum); json+="\","; 
     json+="\"h\":\"";
-    switch(html.hum){
+    switch(config.hum){
       case 0: json+="\","; break;
       case 1: json+="BME280\","; break;
       case 2: json+="SHT21\","; break;
       default: json+="\","; break;
     }
+    json+="\"pres\":\""; json+=(p==true)?"--":String(pres); json+="\","; 
+    json+="\"p\":\"";
+    switch(config.pres){
+      case 0: json+="\","; break;
+      case 1: json+="BME280\","; break;
+      default: json+="\","; break;
+    }
     int dayLight=0;
-    if(summertime() and html.adj) dayLight=3600;
-    json+="\"c\":\""; json+=now()-((html.zone*3600)+dayLight); json+="\"}";
+    if(summertime() and config.adj) dayLight=3600;
+    json+="\"c\":\""; json+=now()-((config.zone*3600)+dayLight); json+="\"}";
     webServer.send(200,"text/plain",json);
-    if(html.temp==3) sensors.requestTemperatures();
+    if(config.temp==3) sensors.requestTemperatures();
   });
 
   webServer.on("/esp/reboot.php",HTTP_POST,[](){
@@ -256,12 +278,12 @@ void web_settings(void){
   });
 
   webServer.on("/esp/rename.php",HTTP_POST,[](){
-    String old="/"+webServer.arg("old");
+    String alt="/"+webServer.arg("old");
     String neu="/"+webServer.arg("new");
-    if(!SPIFFS.exists(old)) return webServer.send(404,"text/plain","FileNotFound");
-    SPIFFS.rename(old,neu);
+    if(!SPIFFS.exists(alt)) return webServer.send(404,"text/plain","FileNotFound");
+    SPIFFS.rename(alt,neu);
     webServer.send(200,"text/plain","OK");
-    old=String();
+    alt=String();
     neu=String();
   });
 
@@ -323,19 +345,19 @@ void web_settings(void){
       String new_pass=webServer.arg("NEWPAS");
       if(String(pass)==old_pass){
         if(user==username and old_pass==new_pass)
-          webServer.send(200,"text/plain",saved[html.lang].saved);
+          webServer.send(200,"text/plain",saved[config.lang].saved);
         else{
           File filew=SPIFFS.open("/save/user.us","w");
           if(filew){
             filew.print("{\"user\":\""+user+"\",\"pass\":\""+new_pass+"\"}");
             filew.close();
-            webServer.send(200,"text/plain",saved[html.lang].saved);
+            webServer.send(200,"text/plain",saved[config.lang].saved);
           } 
         } 
       }
-      else webServer.send(200,"text/plain",saved[html.lang].old_pass);
+      else webServer.send(200,"text/plain",saved[config.lang].old_pass);
     }
-    else webServer.send(200,"text/plain",saved[html.lang].not_saved);
+    else webServer.send(200,"text/plain",saved[config.lang].not_saved);
   });
 
   webServer.on("/esp/name.php",HTTP_POST,[](){
@@ -425,7 +447,7 @@ void web_settings(void){
   });
   
   webServer.onNotFound([](){
-    if(!handleFileRead(webServer.uri())) webServer.send(404,"text/plain","FileNotFound");
+    if(!handleFileRead(webServer.uri())) webServer.send(404,"text/plain",notFound);
   });
   const char * headerkeys[]={"User-Agent","Cookie"};
   size_t headerkeyssize=sizeof(headerkeys)/sizeof(char*);
