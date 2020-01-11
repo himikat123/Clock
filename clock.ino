@@ -306,7 +306,7 @@ void display_temp(float t){
   uint8_t frct=int(fract[0])-0x30;
   uint8_t ttt=abs(t);
   if(config.disp==0){
-    int tt=round(abs(t));
+    int tt=abs(round(t));
     if(round(t)<0){
       TimeDisp[3]=((tt/10%10)==0)?((tt%10)==0)?0x0E:0x10:0x10;
       TimeDisp[4]=((tt/10%10)==0)?tt%10:tt/10%10;
