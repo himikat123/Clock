@@ -18,392 +18,265 @@ String getContentType(String filename){
 
 bool handleFileRead(String path){
   if(webServer.hasHeader("Cookie")){
-    String cookie=webServer.header("Cookie");
-    int8_t au=cookie.indexOf("auth");
+    String cookie = webServer.header("Cookie");
+    int8_t au = cookie.indexOf("auth");
     uint8_t cook[10]; 
-    uint8_t coincid=0;
+    uint8_t coincid = 0;
     uint8_t code_auth[10];
-    ESP.rtcUserMemoryRead(0,(uint32_t*)&code_auth,10);
-    for(uint8_t i=0;i<10;i++) cook[i]=(uint8_t)cookie[au+5+i]-48;
-    for(uint8_t i=0;i<10;i++) if(code_auth[i]==cook[i]) coincid++;
-    if(au!=-1 and coincid==10 or 
-       path.endsWith("json") or 
-       path=="/log-err.htm" or
-       path=="/ok.htm" or
-       path=="/fail.htm") return FileRead(path); 
+    ESP.rtcUserMemoryRead(0, (uint32_t*)&code_auth, 10);
+    for(uint8_t i=0; i<10; i++){ 
+      cook[i] = (uint8_t)cookie[au + 5 + i] - 48;
+    }
+    for(uint8_t i=0; i<10; i++) if(code_auth[i] == cook[i]) coincid++;
+    if(au != -1 and coincid == 10){
+      if(datas.ap_mode){
+        if(path.endsWith("json")) return FileRead(path);
+        else return FileRead("/apnetw.htm");
+      }
+      else return FileRead(path); 
+    }
     else return FileRead("/login.htm"); 
   }
   else{
-    if(path.endsWith("json")) return FileRead(path);
-    else return FileRead("/login.htm");
+    return FileRead("/login.htm");
   }
 }
 
 bool FileRead(String path){
-  if(path.endsWith("/")) path+="index.htm";
-  String contentType=getContentType(path);
-  String pathWithGz=path+".gz";
-  if(SPIFFS.exists(pathWithGz)||SPIFFS.exists(path)){
-    if(SPIFFS.exists(pathWithGz)) path+=".gz";
-    File file=SPIFFS.open(path,"r");
-    size_t sent=webServer.streamFile(file,contentType);
+  if(path.endsWith("/")) path += "index.htm";
+  String contentType = getContentType(path);
+  String pathWithGz = path + ".gz";
+  if(SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)){
+    if(SPIFFS.exists(pathWithGz)) path += ".gz";
+    File file = SPIFFS.open(path, "r");
+    size_t sent = webServer.streamFile(file, contentType);
     file.close();
     return true;
   }
   return false;
 }
 
-void handleFileUpload(){
-  if(webServer.uri()!="/edit") return;
-  HTTPUpload& upload=webServer.upload();
-  if(upload.status==UPLOAD_FILE_START){
-    String filename=upload.filename;
-    if(!filename.startsWith("/")) filename="/"+filename;
-    fsUploadFile=SPIFFS.open(filename,"w");
-    filename=String();
+void handleFileUpload(void){
+  if(webServer.uri() != "/edit") return;
+  HTTPUpload& upload = webServer.upload();
+  if(upload.status == UPLOAD_FILE_START){
+    String filename = upload.filename;
+    if(!filename.startsWith("/")) filename = "/" + filename;
+    fsUploadFile = SPIFFS.open(filename, "w");
+    filename = String();
   } 
-  else if(upload.status==UPLOAD_FILE_WRITE){
-    if(fsUploadFile) fsUploadFile.write(upload.buf,upload.currentSize);
+  else if(upload.status == UPLOAD_FILE_WRITE){
+    if(fsUploadFile) fsUploadFile.write(upload.buf, upload.currentSize);
   } 
-  else if(upload.status==UPLOAD_FILE_END){
+  else if(upload.status == UPLOAD_FILE_END){
     if(fsUploadFile) fsUploadFile.close();
   }
 }
 
-String notFound="<html><head><title>HTTP 404 - File Not Found</title></head><body style=\"font-family:Arial;font-size:14px\"><h2>The page cannot be found!</h2><br>The page you have requested cannot be found in ESP8266's memory.<br><br>HTTP 404 - File Not Found</body></html>";
+String notFound = "<html><head><title>HTTP 404 - Файл не найден</title></head><body style=\"font-family:Arial;font-size:14px\"><h2>Страница не найдена!</h2><br>Запрашиваемая страница не найдена в памяти ESP8266.<br><br>HTTP 404 - File Not Found</body></html>";
 
 void web_settings(void){
-  webServer.on("/esp/save.php",HTTP_POST,[](){
-    if(webServer.arg("JS")!=""){
-      File file=SPIFFS.open("/save/save.json","w");
-      if(file){
-        file.print(webServer.arg("JS"));
-        file.close();
-        webServer.send(200,"text/plain",saved[config.lang].saved);
-      }
-      else webServer.send(200,"text/plain",saved[config.lang].not_saved);
+  webServer.on("/esp/save.php", HTTP_POST, [](){
+    String daten = webServer.arg("CONFIG");
+    File file = SPIFFS.open("/config.json", "w");
+    if(file){
+      file.print(daten);
+      file.close();
+      webServer.send(200, "text/plain", "OK");
     }
-    if(webServer.arg("JSSIDS")!=""){  
-      File file=SPIFFS.open("/save/jssids.json","w");
-      if(file){
-        file.print(webServer.arg("JSSIDS"));
-        file.close();
-      }
+    else webServer.send(200, "text/plain", "ERROR");  
+  });
+////////////////////////////////////////////////////////////////////////
+  webServer.on("/esp/ssids.php", HTTP_GET, [](){
+    String json = "{";
+    uint8_t n = WiFi.scanNetworks();
+    for(uint8_t i=0; i<n; i++){
+      json += "\""; 
+      json += WiFi.SSID(i);
+      json += "\":\"";
+      json += abs(WiFi.RSSI(i));
+      if(i == n - 1) json += "\"}";
+      else json += "\",";
     }
-    if(webServer.arg("SSIDS")!=""){  
-      File file=SPIFFS.open("/save/ssids.json","w");
-      if(file){
-        file.print(webServer.arg("SSIDS"));
-        file.close();
-      }
-    }  
+    webServer.send(200, "text/json", json);
   });
-
-  webServer.on("/esp/ssid.php",HTTP_POST,[](){
-    String json="{";
-    uint8_t n=WiFi.scanNetworks();
-    for(uint8_t i=0;i<n;i++){
-      json+="\""; 
-      json+=WiFi.SSID(i);
-      json+="\":\"";
-      json+=abs(WiFi.RSSI(i));
-      if(i==n-1) json+="\"}";
-      else json+="\",";
-    }
-    webServer.send(200,"text/json",json);
+///////////////////////////////////////////////////////////////////////
+  webServer.on("/esp/ip_gw.php", HTTP_GET, [](){
+    String json = "{\"ip_s\":\""; json += WiFi.localIP().toString();    json += "\",";
+    json += "\"gw_s\":\"";        json += WiFi.gatewayIP().toString();  json += "\",";
+    json += "\"mask_s\":\"";      json += WiFi.subnetMask().toString(); json += "\"}";
+    webServer.send(200, "text/plain", json);
   });
-
-  webServer.on("/esp/ssd.php",HTTP_POST,[](){
-    String json="{\"ssid\":\""; json+=WiFi.SSID(); json+="\",";
-    json+="\"ip\":\""; json+=WiFi.localIP().toString(); json+="\"}";
-    webServer.send(200,"text/json",json);
+//////////////////////////////////////////////////////////////////////////
+  webServer.on("/esp/sens.php", HTTP_GET, [](){
+    String json = "{\"fw\":\"v"; json += fw; json += "\",";
+    json += "\"ssid\":\""; json += WiFi.SSID(); json += "\",";
+    json += "\"ch\":"; json += WiFi.channel(); json += ",";
+    json += "\"sig\":\""; json += WiFi.RSSI(); json += "dB\",";
+    json += "\"mac\":\""; json += WiFi.macAddress(); json += "\",";
+    json += "\"ip\":\""; json += WiFi.localIP().toString(); json += "\",";
+    json += "\"bme280_temp\":\""; json += sensors.bme280_det ? String(sensors.bme280_temp) : "40400"; json += "\",";
+    json += "\"bme280_hum\":\""; json += sensors.bme280_det ? String(sensors.bme280_hum) : "40400"; json += "\",";
+    json += "\"bme280_pres\":\""; json += sensors.bme280_det ? String(sensors.bme280_pres) : "40400"; json += "\",";
+    json += "\"bmp180_temp\":\""; json += sensors.bmp180_det ? String(sensors.bmp180_temp) : "40400"; json += "\",";
+    json += "\"bmp180_pres\":\""; json += sensors.bmp180_det ? String(sensors.bmp180_pres) : "40400"; json += "\",";
+    json += "\"sht21_temp\":\""; json += sensors.sht21_det ? String(sensors.sht21_temp) : "40400"; json += "\",";
+    json += "\"sht21_hum\":\""; json += sensors.sht21_det ? String(sensors.sht21_hum) : "40400"; json += "\",";
+    json += "\"dht22_temp\":\""; json += sensors.dht22_det ? String(sensors.dht22_temp) : "40400"; json += "\",";
+    json += "\"dht22_hum\":\""; json += sensors.dht22_det ? String(sensors.dht22_hum) : "40400"; json += "\",";
+    json += "\"ds18_temp\":\""; json += sensors.ds18_det ? String(sensors.ds18_temp) : "40400"; json += "\",";
+    json += "\"ds32_temp\":\""; json += sensors.ds32_det ? String(sensors.ds32_temp) : "40400"; json += "\",";
+    json += "\"snum\":"; json += datas.snum; json += ",";
+    json += "\"snum2\":"; json += datas.snum2; json += "}";
+    webServer.send(200, "text/json", json);
   });
-
-  webServer.on("/esp/lang.php",HTTP_POST,[](){
-    config.lang=(webServer.arg("LANG").toInt());
-    webServer.send(200,"text/plain","OK");
+//////////////////////////////////////////////////////////////////////////
+  webServer.on("/esp/sensors.php", HTTP_GET, [](){
+    String json = "{\"dbmet\":\""; json += sensors.bme280_det ? String(sensors.bme280_temp - sensors.bme280_temp_corr) : "40400"; json += "\",";
+    json += "\"dbmeh\":\""; json += sensors.bme280_det ? String(sensors.bme280_hum - sensors.bme280_hum_corr) : "40400"; json += "\",";
+    json += "\"dbmep\":\""; json += sensors.bme280_det ? String(sensors.bme280_pres - sensors.bme280_pres_corr) : "40400"; json += "\",";
+    json += "\"dbmpt\":\""; json += sensors.bmp180_det ? String(sensors.bmp180_temp - sensors.bmp180_temp_corr) : "40400"; json += "\",";
+    json += "\"dbmpp\":\""; json += sensors.bmp180_det ? String(sensors.bmp180_pres - sensors.bmp180_pres_corr) : "40400"; json += "\",";
+    json += "\"dshtt\":\""; json += sensors.sht21_det ? String(sensors.sht21_temp - sensors.sht21_temp_corr) : "40400"; json += "\",";
+    json += "\"dshth\":\""; json += sensors.sht21_det ? String(sensors.sht21_hum - sensors.sht21_hum_corr) : "40400"; json += "\",";
+    json += "\"ddhtt\":\""; json += sensors.dht22_det ? String(sensors.dht22_temp - sensors.dht22_temp_corr) : "40400"; json += "\",";
+    json += "\"ddhth\":\""; json += sensors.dht22_det ? String(sensors.dht22_hum - sensors.dht22_hum_corr) : "40400"; json += "\",";
+    json += "\"dds18t\":\""; json += sensors.ds18_det ? String(sensors.ds18_temp - sensors.ds18_temp_corr) : "40400"; json += "\",";
+    json += "\"dds32t\":\""; json += sensors.ds32_det ? String(sensors.ds32_temp - sensors.ds32_temp_corr) : "40400"; json += "\"}";
+    webServer.send(200, "text/json", json);
   });
-
-  webServer.on("/esp/temp.php",HTTP_POST,[](){
-    config.temp=webServer.arg("SENSOR").toInt();
-    webServer.send(200,"text/plain","OK");
+///////////////////////////////////////////////////////////////////
+  webServer.on("/esp/bright.php", HTTP_GET, [](){
+    int bright = webServer.arg("br").toInt();
+    if(datas.is_day) config.day_bright = bright;
+    else config.night_bright = bright;
+    webServer.send(200, "text/plain", "OK");
   });
-
-  webServer.on("/esp/hum.php",HTTP_POST,[](){
-    config.hum=webServer.arg("SENSOR").toInt();
-    webServer.send(200,"text/plain","OK");
+/////////////////////////////////////////////////////////////////////////
+  webServer.on("/esp/bright2.php", HTTP_GET, [](){
+    int bright = webServer.arg("br").toInt();
+    if(datas.is_day2) config.day_bright2 = bright;
+    else config.night_bright2 = bright;
+    webServer.send(200, "text/plain", "OK");
   });
-
-  webServer.on("/esp/pres.php",HTTP_POST,[](){
-    config.pres=webServer.arg("SENSOR").toInt();
-    webServer.send(200,"text/plain","OK");
-  });
-
-  webServer.on("/esp/tcor.php",HTTP_POST,[](){
-    config.t_cor=webServer.arg("COR").toFloat();
-    webServer.send(200,"text/plain","OK");
-  });
-
-  webServer.on("/esp/hcor.php",HTTP_POST,[](){
-    config.h_cor=webServer.arg("COR").toFloat();
-    webServer.send(200,"text/plain","OK");
-  });
-
-  webServer.on("/esp/pcor.php",HTTP_POST,[](){
-    config.p_cor=webServer.arg("COR").toFloat();
-    webServer.send(200,"text/plain","OK");
-  });
-  
-  webServer.on("/esp/br.php",HTTP_POST,[](){
-    int bright=webServer.arg("BR").toInt();
-    tm1637_6D.set(bright);
-    webServer.send(200,"text/plain",String(bright));
-  });
-
-  webServer.on("/esp/br_n.php",HTTP_POST,[](){
-    int bright=webServer.arg("BR_N").toInt();
-    tm1637_6D.set(bright);
-    webServer.send(200,"text/plain",String(bright));
-  });
-
-  webServer.on("/esp/data.php",HTTP_POST,[](){
-    bool t=get_temp();
-    bool h=get_humidity();
-    bool p=get_pres();
-    String json="{\"t\":"; json+=(t==true)?"\"--\"":String(temp); json+=",";
-    json+="\"h\":"; json+=(h==true)?"\"--\"":String(hum); json+=",";
-    json+="\"p\":"; json+=(p==true)?"\"--\"":String(pres); json+="}";
-    webServer.send(200,"text/plain",json);
-    if(config.temp==3) sensors.requestTemperatures();
-  });
-
-  webServer.on("/esp/mac_ip.php",HTTP_POST,[](){
-    String json="{\"mac\":\""; json+=WiFi.macAddress();          json+="\",";
-    json+="\"ip\":\"";         json+=WiFi.softAPIP().toString(); json+="\"}";
-    webServer.send(200,"text/plain",json);
-  });
-
-  webServer.on("/esp/ip_gw.php",HTTP_POST,[](){
-    String json="{\"ip\":\""; json+=WiFi.localIP().toString();    json+="\",";
-    json+="\"gw\":\"";        json+=WiFi.gatewayIP().toString();  json+="\",";
-    json+="\"mask\":\"";      json+=WiFi.subnetMask().toString(); json+="\"}";
-    webServer.send(200,"text/plain",json);
-  });
-
-  webServer.on("/esp/status.php",HTTP_POST,[](){
-    bool t=get_temp();
-    bool h=get_humidity();
-    bool p=get_pres();
-    String json="{\"fw\":\""; json+="v"+fw;                      json+="\",";
-    json+="\"ssid\":\"";      json+=WiFi.SSID();                 json+="\",";
-    json+="\"ch\":\"";        json+=WiFi.channel();              json+="\",";
-    json+="\"sig\":\"";       json+=WiFi.RSSI();                 json+="dB\",";
-    json+="\"mac\":\"";       json+=WiFi.macAddress();           json+="\",";
-    json+="\"ip\":\"";        json+=WiFi.localIP().toString();   json+="\",";
-    json+="\"temp\":\"";      json+=(t==true)?"--":String(temp); json+="\",";
-    json+="\"t\":\"";
-    switch(config.temp){
-      case 0: json+="\","; break;
-      case 1: json+="BME280\","; break;
-      case 2: json+="SHT21\","; break;
-      case 3: json+="DS18B20\","; break;
-      case 4: json+="DS3231\","; break;
-      default: json+="\","; break;
-    }
-    json+="\"hum\":\""; json+=(h==true)?"--":String(hum); json+="\","; 
-    json+="\"h\":\"";
-    switch(config.hum){
-      case 0: json+="\","; break;
-      case 1: json+="BME280\","; break;
-      case 2: json+="SHT21\","; break;
-      default: json+="\","; break;
-    }
-    json+="\"pres\":\""; json+=(p==true)?"--":String(pres); json+="\","; 
-    json+="\"p\":\"";
-    switch(config.pres){
-      case 0: json+="\","; break;
-      case 1: json+="BME280\","; break;
-      default: json+="\","; break;
-    }
-    int dayLight=0;
-    if(summertime() and config.adj) dayLight=3600;
-    json+="\"c\":\""; json+=now()-((config.zone*3600)+dayLight); json+="\"}";
-    webServer.send(200,"text/plain",json);
-    if(config.temp==3) sensors.requestTemperatures();
-  });
-
-  webServer.on("/esp/reboot.php",HTTP_POST,[](){
-    webServer.send(200,"text/plain","OK");
+////////////////////////////////////////////////////////////////////////
+  webServer.on("/esp/reboot.php", HTTP_GET, [](){
+    webServer.send(200, "text/plain", "OK");
     ESP.deepSleep(10);
     ESP.reset();
   });
-
-  webServer.on("/esp/fs.php",HTTP_POST,[](){
+////////////////////////////////////////////////////////////////////////
+  webServer.on("/esp/list.php", HTTP_GET, [](){
+    Dir dir = SPIFFS.openDir("/");
+    String output = "{\"fl\":[";
+    while(dir.next()){
+      if(output != "{\"fl\":[") output += ',';
+      output += "{\"name\":\""; output += dir.fileName();
+      output += "\",\"type\":\"file\",\"size\":\""; output += dir.fileSize();
+      output += "\"}"; 
+    }
     FSInfo fs_info;
     SPIFFS.info(fs_info);
-    String json="{\"total\":"; json+=round(fs_info.totalBytes/1024);
-    json+=",\"used\":"; json+=round(fs_info.usedBytes/1024); json+="}";
-    webServer.send(200,"text/plain",json);
+    output += "],\"fs\":{\"total\":";
+    output += round(fs_info.totalBytes / 1024);
+    output += ",\"used\":";
+    output += round(fs_info.usedBytes / 1024);
+    output += "}}";
+    webServer.send(200, "text/json", output);
   });
-
-  webServer.on("/esp/list.php",HTTP_POST,[](){
-    if(!webServer.hasArg("p")){
-      webServer.send(500,"text/plain","BAD ARGS"); 
-      return;
-    }
-    String path=webServer.arg("p");
-    if(path=="") path="/";
-    else path="/"+path;
-    Dir dir=SPIFFS.openDir(path);
-    path=String();
-    String output="[";
-    while(dir.next()){
-      if(dir.fileName()!="/save/user.us"){
-        if(output!="[") output+=',';
-        output+="{\"name\":\""; output+=dir.fileName();
-        output+="\",\"type\":\"file\",\"size\":\""; output+=dir.fileSize();
-        output+="\"}"; 
-      }
-    }
-    output+="]";
-    webServer.send(200,"text/json",output);
-  });
-  
-  webServer.on("/esp/del.php",HTTP_POST,[](){
-    String path="/"+webServer.arg("d");
-    if(!SPIFFS.exists(path)) return webServer.send(404,"text/plain","FileNotFound");
+////////////////////////////////////////////////////////////////////////
+  webServer.on("/esp/del.php", HTTP_GET, [](){
+    String path = "/" + webServer.arg("d");
+    if(!SPIFFS.exists(path)) return webServer.send(404, "text/plain", "FileNotFound");
     SPIFFS.remove(path);
-    webServer.send(200,"text/plain","OK");
-    path=String();
+    webServer.send(200, "text/plain", "OK");
+    path = String();
   });
-
-  webServer.on("/esp/rename.php",HTTP_POST,[](){
-    String alt="/"+webServer.arg("old");
-    String neu="/"+webServer.arg("new");
-    if(!SPIFFS.exists(alt)) return webServer.send(404,"text/plain","FileNotFound");
-    SPIFFS.rename(alt,neu);
-    webServer.send(200,"text/plain","OK");
-    alt=String();
-    neu=String();
+////////////////////////////////////////////////////////////////////////
+  webServer.on("/esp/rename.php", HTTP_GET, [](){
+    String alt = "/" + webServer.arg("old");
+    String neu = "/" + webServer.arg("new");
+    if(!SPIFFS.exists(alt)) return webServer.send(404, "text/plain", "FileNotFound");
+    SPIFFS.rename(alt, neu);
+    webServer.send(200, "text/plain", "OK");
+    alt = String();
+    neu = String();
   });
-
-  webServer.on("/log.php",HTTP_POST,[](){
-    String login=webServer.arg("LOGIN");
-    String passw=webServer.arg("PASSW");
-    String fileData,username,pass;
-    File file=SPIFFS.open("/save/user.us","r");
-    if(file){
-      fileData=file.readString();
-      file.close();
-      DynamicJsonBuffer jsonBuffer;
-      JsonObject& root=jsonBuffer.parseObject(fileData);
-      if(root.success()){
-        String u=root["user"];  
-        String p=root["pass"];
-        username=u;
-        pass=p;
-      }
-    }
-    if(login==username and passw==pass){
-      String code="";
+//////////////////////////////////////////////////////////////////////
+  webServer.on("/esp/login.php", HTTP_POST, [](){
+    String login = webServer.arg("LOGIN");
+    String passw = webServer.arg("PASSW");
+    if(login == config.username and passw == config.password){
+      String code = "";
       uint8_t code_auth[10];
-      for(uint8_t i=0;i<10;i++){
-        code_auth[i]=ESP8266TrueRandom.random(0,10);
-        code+=String(code_auth[i]); 
+      for(uint8_t i=0; i<10; i++){
+        code_auth[i] = ESP8266TrueRandom.random(0, 10);
+        code += String(code_auth[i]); 
       }
-      webServer.sendHeader("Location","/");
-      webServer.sendHeader("Cache-Control","no-cache");
-      webServer.sendHeader("Set-Cookie","auth="+code+"; Max-Age=3600");
+      webServer.sendHeader("Location", "/");
+      webServer.sendHeader("Cache-Control", "no-cache");
+      webServer.sendHeader("Set-Cookie", "auth=" + code + "; Max-Age=3600; path=/");
       webServer.send(301);
-      ESP.rtcUserMemoryWrite(0,(uint32_t*)&code_auth,10);
+      ESP.rtcUserMemoryWrite(0, (uint32_t*) & code_auth, 10);
     }
     else{
-      webServer.sendHeader("Location","/log-err.htm");
-      webServer.sendHeader("Cache-Control","no-cache");
+      webServer.sendHeader("Location", "/login.htm?error");
+      webServer.sendHeader("Cache-Control", "no-cache");
       webServer.send(301);
     }
   });
-
-  webServer.on("/esp/user.php",HTTP_POST,[](){
-    String fileData,username,pass;
-    File file=SPIFFS.open("/save/user.us","r");
-    if(file){
-      fileData=file.readString();
-      file.close();
-      DynamicJsonBuffer jsonBuffer;
-      JsonObject& root=jsonBuffer.parseObject(fileData);
-      if(root.success()){
-        String u=root["user"];  
-        String p=root["pass"];
-        username=u;
-        pass=p;
+///////////////////////////////////////////////////////////////////
+  webServer.on("/esp/user.php", HTTP_POST, [](){
+    String user = webServer.arg("name");
+    String old_pass = webServer.arg("oldpass");
+    String new_pass = webServer.arg("newpass");
+    if(String(config.password) == old_pass){
+      File filew = SPIFFS.open("/user.us", "w");
+      if(filew){
+        filew.print("{\"user\":\"" + user + "\",\"pass\":\"" + new_pass + "\"}");
+        filew.close();
+        webServer.send(200, "text/plain", "OK");
       }
+      else webServer.send(200, "text/plain", "ERROR Write file");
     }
-    if(webServer.arg("USER")!=""){
-      String user=webServer.arg("USER");
-      String old_pass=webServer.arg("OLDPAS");
-      String new_pass=webServer.arg("NEWPAS");
-      if(String(pass)==old_pass){
-        if(user==username and old_pass==new_pass)
-          webServer.send(200,"text/plain",saved[config.lang].saved);
-        else{
-          File filew=SPIFFS.open("/save/user.us","w");
-          if(filew){
-            filew.print("{\"user\":\""+user+"\",\"pass\":\""+new_pass+"\"}");
-            filew.close();
-            webServer.send(200,"text/plain",saved[config.lang].saved);
-          } 
-        } 
-      }
-      else webServer.send(200,"text/plain",saved[config.lang].old_pass);
-    }
-    else webServer.send(200,"text/plain",saved[config.lang].not_saved);
+    else webServer.send(200, "text/plain", "error");
   });
-
-  webServer.on("/esp/name.php",HTTP_POST,[](){
-    String fileData, user;
-    File file=SPIFFS.open("/save/user.us","r");
-    if(file){
-      fileData=file.readString();
-      file.close();
-      DynamicJsonBuffer jsonBuffer;
-      JsonObject& root=jsonBuffer.parseObject(fileData);
-      if(root.success()){
-        String uname=root["user"];
-        user=uname;
-      }
-    }
-    webServer.send(200,"text/plain",user);
+///////////////////////////////////////////////////////////////
+  webServer.on("/esp/username.php", HTTP_GET, [](){
+    String username = "{\"user\":\"";
+    username += config.username;
+    username += "\"}";
+    webServer.send(200, "text/plain", username);
   });
-  
-  webServer.on("/edit",HTTP_POST,[](){
-    webServer.send(200,"text/plain","");
-  },handleFileUpload);
-
-  webServer.on("/esp/update.php",HTTP_POST,[](){
+////////////////////////////////////////////////////////////////
+  webServer.on("/edit", HTTP_POST, [](){
+    webServer.send(200, "text/plain", "");
+  }, handleFileUpload);
+////////////////////////////////////////////////////////////////
+  webServer.on("/esp/update.php", HTTP_POST, [](){
     if(Update.hasError()) handleFileRead("/fail.htm");
     else handleFileRead("/ok.htm");
     delay(1000);
     ESP.deepSleep(10);
     ESP.reset();
-  },[](){
-    HTTPUpload& upload=webServer.upload();
-    if(upload.status==UPLOAD_FILE_START){
+  }, [](){
+    HTTPUpload& upload = webServer.upload();
+    if(upload.status == UPLOAD_FILE_START){
       Serial.setDebugOutput(true);
-      Serial.printf("Update: %s\n",upload.filename.c_str());
-      uint32_t maxSketchSpace=(ESP.getFreeSketchSpace()-0x1000)&0xFFFFF000;
+      Serial.printf("Update: %s\n", upload.filename.c_str());
+      uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
       if(!Update.begin(maxSketchSpace)){
         Update.printError(Serial);
       }
     }
-    else if(upload.status==UPLOAD_FILE_WRITE){
-      if(Update.write(upload.buf,upload.currentSize)!=upload.currentSize){
+    else if(upload.status == UPLOAD_FILE_WRITE){
+      if(Update.write(upload.buf,upload.currentSize) != upload.currentSize){
         Update.printError(Serial);
       }
     } 
-    else if(upload.status==UPLOAD_FILE_END){
+    else if(upload.status == UPLOAD_FILE_END){
       if(Update.end(true)){
-        Serial.printf("Update Success: %u\nRebooting...\n",upload.totalSize);
+        Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
       } 
       else{
         Update.printError(Serial);
@@ -412,31 +285,31 @@ void web_settings(void){
     }
     yield();
   });
-  
-  webServer.on("/esp/update_f.php",HTTP_POST,[](){
+//////////////////////////////////////////////////////////////////
+  webServer.on("/esp/update_f.php", HTTP_POST, [](){
     if(Update.hasError()) handleFileRead("/fail.htm");
     else handleFileRead("/ok.htm");
     delay(1000);
     ESP.deepSleep(10);
     ESP.reset();
-  },[](){
-    HTTPUpload& upload=webServer.upload();
-    if(upload.status==UPLOAD_FILE_START){
+  }, [](){
+    HTTPUpload& upload = webServer.upload();
+    if(upload.status == UPLOAD_FILE_START){
       Serial.setDebugOutput(true);
-      Serial.printf("Update: %s\n",upload.filename.c_str());
-      uint32_t maxSketchSpace=(ESP.getFreeSketchSpace()-0x1000)&0xFFFFF000;
-      if(!Update.begin(maxSketchSpace,U_SPIFFS)){
-        Update.printError(Serial);
-      }
+      Serial.printf("Update: %s\n", upload.filename.c_str());
+      uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
+//      if(!Update.begin(maxSketchSpace, U_SPIFFS)){
+//        Update.printError(Serial);
+//      }
     }
-    else if(upload.status==UPLOAD_FILE_WRITE){
-      if(Update.write(upload.buf,upload.currentSize)!=upload.currentSize){
+    else if(upload.status == UPLOAD_FILE_WRITE){
+      if(Update.write(upload.buf, upload.currentSize) != upload.currentSize){
         Update.printError(Serial);
       }
     } 
-    else if(upload.status==UPLOAD_FILE_END){
+    else if(upload.status == UPLOAD_FILE_END){
       if(Update.end(true)){
-        Serial.printf("Update Success: %u\nRebooting...\n",upload.totalSize);
+        Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
       } 
       else{
         Update.printError(Serial);
@@ -445,13 +318,12 @@ void web_settings(void){
     }
     yield();
   });
-  
+//////////////////////////////////////////////////////////////////
   webServer.onNotFound([](){
-    if(!handleFileRead(webServer.uri())) webServer.send(404,"text/plain",notFound);
+    if(!handleFileRead(webServer.uri())) webServer.send(404, "text/plain", notFound);
   });
-  const char * headerkeys[]={"User-Agent","Cookie"};
-  size_t headerkeyssize=sizeof(headerkeys)/sizeof(char*);
-  webServer.collectHeaders(headerkeys,headerkeyssize);
+  const char * headerkeys[] = {"User-Agent", "Cookie"};
+  size_t headerkeyssize = sizeof(headerkeys) / sizeof(char*);
+  webServer.collectHeaders(headerkeys, headerkeyssize);
   webServer.begin();
 }
-
