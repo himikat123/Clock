@@ -1,4 +1,4 @@
-String fw = "3.0";
+String fw = "3.1";
 String vers = "BIM v" + fw;
 int rssi = 0;
 File fsUploadFile;
@@ -92,7 +92,9 @@ struct{
   float thing[9] = {4040.0, 4040.0, 4040.0, 4040.0, 4040.0, 4040.0, 4040.0, 4040.0, 4040.0};
   bool is_day = true;
   bool is_day2 = true;
-  bool ap_mode =false;
+  bool ap_mode = false;
+  bool ip_mode = false;
+  uint8_t ip_cnt = 0;
 } datas;
 
 struct{
