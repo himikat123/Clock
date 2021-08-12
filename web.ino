@@ -17,6 +17,7 @@ String getContentType(String filename){
 }
 
 bool handleFileRead(String path){
+  //Serial.println(path);
   if(webServer.hasHeader("Cookie")){
     String cookie = webServer.header("Cookie");
     int8_t au = cookie.indexOf("auth");
@@ -28,31 +29,26 @@ bool handleFileRead(String path){
       cook[i] = (uint8_t)cookie[au + 5 + i] - 48;
     }
     for(uint8_t i=0; i<10; i++) if(code_auth[i] == cook[i]) coincid++;
-    if(au != -1 and coincid == 10){
-      if(datas.ap_mode){
-        if(path.endsWith("json")) return FileRead(path);
-        else return FileRead("/apnetw.htm");
-      }
-      else return FileRead(path); 
-    }
+    if(au != -1 and coincid == 10) return FileRead(path); 
     else return FileRead("/login.htm"); 
   }
-  else{
-    return FileRead("/login.htm");
-  }
+  else return FileRead("/login.htm");
 }
 
 bool FileRead(String path){
+  //Serial.println(path);
   if(path.endsWith("/")) path += "index.htm";
   String contentType = getContentType(path);
   String pathWithGz = path + ".gz";
   if(SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)){
     if(SPIFFS.exists(pathWithGz)) path += ".gz";
+    //Serial.println(path);
     File file = SPIFFS.open(path, "r");
     size_t sent = webServer.streamFile(file, contentType);
     file.close();
     return true;
   }
+  //Serial.println("No file found");
   return false;
 }
 
@@ -73,7 +69,7 @@ void handleFileUpload(void){
   }
 }
 
-String notFound = "<html><head><title>HTTP 404 - Файл не найден</title></head><body style=\"font-family:Arial;font-size:14px\"><h2>Страница не найдена!</h2><br>Запрашиваемая страница не найдена в памяти ESP8266.<br><br>HTTP 404 - File Not Found</body></html>";
+String notFound = "HTTP 404 - File Not Found";
 
 void web_settings(void){
   webServer.on("/esp/save.php", HTTP_POST, [](){

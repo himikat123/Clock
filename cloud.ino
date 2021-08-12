@@ -1,5 +1,4 @@
 void getWeatherNow(void){
-  Serial.println("weather update");
   String url;
   if(config.provider == 0){    
     url = "http://api.openweathermap.org/data/2.5/weather";
@@ -19,7 +18,6 @@ void getWeatherNow(void){
 }
 
 String weatherRequest(String url){
-  Serial.println(url);
   String httpData = "";
   HTTPClient client;
   client.begin(url);
@@ -34,7 +32,6 @@ String weatherRequest(String url){
 }
 
 void parseWeatherNow(String httpData){
-  Serial.println(httpData);
   StaticJsonDocument<2048> root;
   DeserializationError error = deserializeJson(root, httpData);
   if(error) return;
@@ -51,6 +48,8 @@ void parseWeatherNow(String httpData){
     datas.pres_web      *= 0.75;
   }
   httpData = "";
+  datas.wet_tm = now();
+  Serial.printf("weather updated at %02d:%02d:%02d\r\n", hour(), minute(), second());
 }
 
 void thingspk_recv(void){
@@ -81,6 +80,7 @@ void parseThing(String httpData){
   StaticJsonDocument<2048> root;
   DeserializationError error = deserializeJson(root, httpData);
   if(error) return;
+  String thing_tm = root["feeds"][0]["created_at"];
   datas.thing[1] = root["feeds"][0]["field1"];
   datas.thing[2] = root["feeds"][0]["field2"];
   datas.thing[3] = root["feeds"][0]["field3"];
@@ -89,7 +89,20 @@ void parseThing(String httpData){
   datas.thing[6] = root["feeds"][0]["field6"];
   datas.thing[7] = root["feeds"][0]["field7"];
   datas.thing[8] = root["feeds"][0]["field8"];
-  httpData = "";
+  httpData = ""; 
+  TimeElements tm;
+  char buf[22];
+  thing_tm.toCharArray(buf, 22);
+  tm.Year = atoi(strtok(buf, "-")) - 1970;
+  tm.Month = atoi(strtok(NULL, "-"));
+  tm.Day = atoi(strtok(NULL, "T"));
+  tm.Hour = atoi(strtok(NULL, ":"));
+  tm.Minute = atoi(strtok(NULL, ":"));
+  tm.Second = atoi(strtok(NULL, ":"));
+  datas.thing_tm = makeTime(tm);
+  datas.thing_tm += config.utc * 3600;
+  datas.thing_tm += config.daylight ? is_summertime() ? 3600 : 0 : 0;
+  Serial.printf("thingspeak updated at %02d:%02d:%02d\r\n", hour(), minute(), second());
 }
 
 void thingspk_send(void){
@@ -243,4 +256,11 @@ void thingspk_send(void){
   }
   client.end();
   httpData = "";
+}
+
+boolean is_summertime(){
+  if(month() < 3 || month() > 10) return false;
+  if(month() > 3 && month() < 10) return true;
+  if((month() == 3 && (hour() + 24 * day()) >= (1 + 24 * (31 - (5 * year() / 4 + 4) % 7))) || (month() == 10 && (hour() + 24 * day()) < (1 + 24 * (31 - (5 * year() / 4 + 1) % 7)))) return true;
+  else return false;
 }

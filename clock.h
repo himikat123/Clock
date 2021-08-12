@@ -1,4 +1,4 @@
-String fw = "3.1";
+String fw = "3.2";
 String vers = "BIM v" + fw;
 int rssi = 0;
 File fsUploadFile;
@@ -69,6 +69,22 @@ struct{
   char        cityid[12] = "";
   char        appid[40] = "";
   char        appkey[40] = "";
+  uint8_t     bme_plc = 0;
+  uint8_t     bmp_plc = 0;
+  uint8_t     sht_plc = 0;
+  uint8_t     dht_plc = 0;
+  uint8_t     ds18_plc = 0;
+  uint8_t     ds32_plc = 0;
+  uint8_t     ths_plc = 0;
+  uint8_t     wet_plc = 0;
+  uint8_t     bme_plc2 = 0;
+  uint8_t     bmp_plc2 = 0;
+  uint8_t     sht_plc2 = 0;
+  uint8_t     dht_plc2 = 0;
+  uint8_t     ds18_plc2 = 0;
+  uint8_t     ds32_plc2 = 0;
+  uint8_t     ths_plc2 = 0;
+  uint8_t     wet_plc2 = 0;
 } config;
 
 struct{
@@ -84,15 +100,17 @@ struct{
   bool clock_synchronized = false;
   time_t prev_millis = 0;
   time_t prev_millis2 = 0;
-  uint8_t snum = 0;
-  uint8_t snum2 = 0;
+  uint8_t snum = 5;
+  uint8_t snum2 = 5;
   float temp_web = 404.0;
   float hum_web = 202.0;
   float pres_web = 4040.0;
   float thing[9] = {4040.0, 4040.0, 4040.0, 4040.0, 4040.0, 4040.0, 4040.0, 4040.0, 4040.0};
+  time_t thing_tm = 0;
+  time_t wet_tm = 0;
   bool is_day = true;
   bool is_day2 = true;
-  bool ap_mode = false;
+//  bool ap_mode = false;
   bool ip_mode = false;
   uint8_t ip_cnt = 0;
 } datas;

@@ -1,4 +1,4 @@
-/* Clock BIM v3.1
+/* Clock BIM v3.2
  * © himikat123@gmail.com, Nürnberg, Deutschland, 2019-2021 
  * https://github.com/himikat123/Clock
  */
@@ -83,15 +83,11 @@ void setup(void){
   pinMode(BUTTON, INPUT);
   pinMode(ONE_WIRE_BUS, INPUT);
   pinMode(SDA, INPUT);
-    //i2c
-  Wire.pins(SDA, SCL);
     //SPIFS
   if(!SPIFFS.begin()) while(1) yield();
     //EEPROM 
   read_eeprom();
   ESP.rtcUserMemoryWrite(0, (uint32_t*) ESP8266TrueRandom.random(0, 1000), 10);
-    //sensors
-  sensors_init();
     //Display
   tm1637_6D.init();
   tm1637_6D.set(3);
@@ -129,23 +125,35 @@ void setup(void){
   ntp -> setTimeZone(config.utc);
   ntp -> setDayLight(config.daylight);
   ntp -> begin();
+    //settings
+  if(!digitalRead(BUTTON) or String(config.ssid) == ""){
+    apMode();
+  }
+    //i2c
+  Wire.pins(SDA, SCL);
+    //sensors
+  sensors_init();
     //Ticker
   weather_upd.attach_ms(1200000, w_upd);
   thing_upd.attach_ms(30000, t_upd);
   thing_send.attach_ms(300000, t_snd);
+    //
+  sensors_read();
+  data_prep();
+  display_fill();
 }
 
 void loop(void){
-  if(!digitalRead(BUTTON)){
+  if(!digitalRead(BUTTON) and !datas.ip_mode){
     datas.ip_mode = true;
     datas.ip_cnt = 0;
   }
   
-  if(WiFi.status() == WL_CONNECTED){
-    if(datas.ap_mode) WiFi.mode(WIFI_STA);
-    datas.ap_mode = false;
+  if(WiFi.status() != WL_CONNECTED){
+    datas.weather_upd = true;
+    datas.thing_upd = true;
+    connectToWiFi();
   }
-  else apMode(WIFI_AP);
   
   if(datas.prev_sec != second()){
     sensors_read();
@@ -164,17 +172,17 @@ void loop(void){
   }
   
   if(datas.weather_upd){
-    if((String(config.appid) != "" or String(config.appkey) != "") and !datas.ap_mode) getWeatherNow();
+    if((String(config.appid) != "" or String(config.appkey) != "") and WiFi.status() == WL_CONNECTED) getWeatherNow();
     datas.weather_upd = false;
   }
   
   if(datas.thing_upd){
-    if(config.thngrcv and !datas.ap_mode) thingspk_recv();
+    if(config.thngrcv and WiFi.status() == WL_CONNECTED) thingspk_recv();
     datas.thing_upd = false;
   }
   
   if(datas.thing_snd){
-    if(config.thngsend and !datas.ap_mode) thingspk_send();
+    if(config.thngsend and WiFi.status() == WL_CONNECTED) thingspk_send();
     datas.thing_snd = false;
   }
   
@@ -189,7 +197,7 @@ void loop(void){
         Clock.getMinute() != minute() or
         Clock.getSecond() != second()
       ){
-        Serial.println("sync RTC");
+        Serial.printf("sync NTP at %02d:%02d:%02d %02d-%02d-%d\r\n", hour(), minute(), second(), day(), month(), year());
         Clock.setYear(year() - 2000);
         Clock.setMonth(month());
         Clock.setDate(day());
@@ -199,6 +207,9 @@ void loop(void){
       }
     }
   }
+  
+  if(now() - ntp -> getLastNTPSync() < 1200) datas.clock_synchronized = true;
+  else datas.clock_synchronized = false;
   
   webServer.handleClient();
 }
@@ -226,42 +237,56 @@ void data_prep(void){
     }
     if(config.dp[datas.snum] > 0){
       switch(config.dt[datas.snum]){
-        case 1: 
-          if(String(config.ds[datas.snum]) == "C") datas.dots = get_clock(datas.dots, 0);
+        case 1:
+          if(String(config.ds[datas.snum]) == "C") datas.dots = get_clock(datas.clock_synchronized ? datas.dots : false, 0);
           if(String(config.ds[datas.snum]) == "D") datas.dots = get_date(0);
           break;
         case 2:
-          if(String(config.ds[datas.snum]) == "T") datas.dots = get_temp(sensors.bme280_temp, 0);
-          if(String(config.ds[datas.snum]) == "H") datas.dots = get_hum((float)sensors.bme280_hum, 0);
+          if(String(config.ds[datas.snum]) == "T") datas.dots = get_temp(sensors.bme280_temp, 0, config.bme_plc);
+          if(String(config.ds[datas.snum]) == "H") datas.dots = get_hum((float)sensors.bme280_hum, 0, config.bme_plc);
           if(String(config.ds[datas.snum]) == "P") datas.dots = get_pres((float)sensors.bme280_pres, 0);
           break;
         case 3:
-          if(String(config.ds[datas.snum]) == "T") datas.dots = get_temp(sensors.bmp180_temp, 0);
+          if(String(config.ds[datas.snum]) == "T") datas.dots = get_temp(sensors.bmp180_temp, 0, config.bmp_plc);
           if(String(config.ds[datas.snum]) == "P") datas.dots = get_pres((float)sensors.bmp180_pres, 0);
           break;
         case 4:
-          if(String(config.ds[datas.snum]) == "T") datas.dots = get_temp(sensors.sht21_temp, 0);
-          if(String(config.ds[datas.snum]) == "H") datas.dots = get_hum((float)sensors.sht21_hum, 0);
+          if(String(config.ds[datas.snum]) == "T") datas.dots = get_temp(sensors.sht21_temp, 0, config.sht_plc);
+          if(String(config.ds[datas.snum]) == "H") datas.dots = get_hum((float)sensors.sht21_hum, 0, config.sht_plc);
           break;
         case 5:
-          if(String(config.ds[datas.snum]) == "T") datas.dots = get_temp(sensors.dht22_temp, 0);
-          if(String(config.ds[datas.snum]) == "H") datas.dots = get_hum((float)sensors.dht22_hum, 0);
+          if(String(config.ds[datas.snum]) == "T") datas.dots = get_temp(sensors.dht22_temp, 0, config.dht_plc);
+          if(String(config.ds[datas.snum]) == "H") datas.dots = get_hum((float)sensors.dht22_hum, 0, config.dht_plc);
           break;
         case 6:
-          datas.dots = get_temp(sensors.ds18_temp, 0);
+          datas.dots = get_temp(sensors.ds18_temp, 0, config.ds18_plc);
           break;
         case 7:
-          datas.dots = get_temp(sensors.ds32_temp, 0);
+          datas.dots = get_temp(sensors.ds32_temp, 0, config.ds32_plc);
           break;
         case 8://thingspeak
-          if(config.ds[datas.snum][0] == 'T') datas.dots = get_temp(datas.thing[String(config.ds[datas.snum][2]).toInt()], 0);
-          if(config.ds[datas.snum][0] == 'H') datas.dots = get_hum(datas.thing[String(config.ds[datas.snum][2]).toInt()], 0);
-          if(config.ds[datas.snum][0] == 'P') datas.dots = get_pres(datas.thing[String(config.ds[datas.snum][2]).toInt()], 0);
+          if(now() - datas.thing_tm < 1200){
+            if(config.ds[datas.snum][0] == 'T') datas.dots = get_temp(datas.thing[String(config.ds[datas.snum][2]).toInt()], 0, config.ths_plc);
+            if(config.ds[datas.snum][0] == 'H') datas.dots = get_hum(datas.thing[String(config.ds[datas.snum][2]).toInt()], 0, config.ths_plc);
+            if(config.ds[datas.snum][0] == 'P') datas.dots = get_pres(datas.thing[String(config.ds[datas.snum][2]).toInt()], 0);
+          }
+          else{
+            if(config.ds[datas.snum][0] == 'T') datas.dots = get_temp(4040.0, 0, config.ths_plc);
+            if(config.ds[datas.snum][0] == 'H') datas.dots = get_hum(4040.0, 0, config.ths_plc);
+            if(config.ds[datas.snum][0] == 'P') datas.dots = get_pres(4040.0, 0);
+          }
           break;
         case 9://weather
-          if(String(config.ds[datas.snum]) == "T") datas.dots = get_temp(datas.temp_web, 0);
-          if(String(config.ds[datas.snum]) == "H") datas.dots = get_hum(datas.hum_web, 0);
-          if(String(config.ds[datas.snum]) == "P") datas.dots = get_pres(datas.pres_web, 0);
+          if(now() - datas.wet_tm < 1200){
+            if(String(config.ds[datas.snum]) == "T") datas.dots = get_temp(datas.temp_web, 0, config.wet_plc);
+            if(String(config.ds[datas.snum]) == "H") datas.dots = get_hum(datas.hum_web, 0, config.wet_plc);
+            if(String(config.ds[datas.snum]) == "P") datas.dots = get_pres(datas.pres_web, 0);
+          }
+          else{
+            if(String(config.ds[datas.snum]) == "T") datas.dots = get_temp(4040.0, 0, config.wet_plc);
+            if(String(config.ds[datas.snum]) == "H") datas.dots = get_hum(4040, 0, config.wet_plc);
+            if(String(config.ds[datas.snum]) == "P") datas.dots = get_pres(4040, 0);
+          }
           break;
         default:;; 
       }
@@ -269,41 +294,55 @@ void data_prep(void){
     if(config.d2p[datas.snum2] > 0){
       switch(config.d2t[datas.snum2]){
         case 1: 
-          if(String(config.d2s[datas.snum2]) == "C") datas.dots2 = get_clock(datas.dots2, 1);
+          if(String(config.d2s[datas.snum2]) == "C") datas.dots2 = get_clock(datas.clock_synchronized ? datas.dots2 : false, 1);
           if(String(config.d2s[datas.snum2]) == "D") datas.dots2 = get_date(1);
           break;
         case 2:
-          if(String(config.d2s[datas.snum2]) == "T") datas.dots2 = get_temp(sensors.bme280_temp, 1);
-          if(String(config.d2s[datas.snum2]) == "H") datas.dots2 = get_hum((float)sensors.bme280_hum, 1);
+          if(String(config.d2s[datas.snum2]) == "T") datas.dots2 = get_temp(sensors.bme280_temp, 1, config.bme_plc2);
+          if(String(config.d2s[datas.snum2]) == "H") datas.dots2 = get_hum((float)sensors.bme280_hum, 1, config.bme_plc2);
           if(String(config.d2s[datas.snum2]) == "P") datas.dots2 = get_pres((float)sensors.bme280_pres, 1);
           break;
         case 3:
-          if(String(config.d2s[datas.snum2]) == "T") datas.dots2 = get_temp(sensors.bmp180_temp, 1);
+          if(String(config.d2s[datas.snum2]) == "T") datas.dots2 = get_temp(sensors.bmp180_temp, 1, config.bmp_plc2);
           if(String(config.d2s[datas.snum2]) == "P") datas.dots2 = get_pres((float)sensors.bmp180_pres, 1);
           break;
         case 4:
-          if(String(config.d2s[datas.snum2]) == "T") datas.dots2 = get_temp(sensors.sht21_temp, 1);
-          if(String(config.d2s[datas.snum2]) == "H") datas.dots2 = get_hum((float)sensors.sht21_hum, 1);
+          if(String(config.d2s[datas.snum2]) == "T") datas.dots2 = get_temp(sensors.sht21_temp, 1, config.sht_plc2);
+          if(String(config.d2s[datas.snum2]) == "H") datas.dots2 = get_hum((float)sensors.sht21_hum, 1, config.sht_plc2);
           break;
         case 5:
-          if(String(config.d2s[datas.snum2]) == "T") datas.dots2 = get_temp(sensors.dht22_temp, 1);
-          if(String(config.d2s[datas.snum2]) == "H") datas.dots2 = get_hum((float)sensors.dht22_hum, 1);
+          if(String(config.d2s[datas.snum2]) == "T") datas.dots2 = get_temp(sensors.dht22_temp, 1, config.dht_plc2);
+          if(String(config.d2s[datas.snum2]) == "H") datas.dots2 = get_hum((float)sensors.dht22_hum, 1, config.dht_plc2);
           break;
         case 6:
-          datas.dots2 = get_temp(sensors.ds18_temp, 1);
+          datas.dots2 = get_temp(sensors.ds18_temp, 1, config.ds18_plc2);
           break;
         case 7:
-          datas.dots2 = get_temp(sensors.ds32_temp, 1);
+          datas.dots2 = get_temp(sensors.ds32_temp, 1, config.ds32_plc2);
           break;
         case 8://thingspeak
-          if(config.d2s[datas.snum2][0] == 'T') datas.dots2 = get_temp(datas.thing[String(config.d2s[datas.snum2][2]).toInt()], 1);
-          if(config.d2s[datas.snum2][0] == 'H') datas.dots2 = get_hum(datas.thing[String(config.d2s[datas.snum2][2]).toInt()], 1);
-          if(config.d2s[datas.snum2][0] == 'P') datas.dots2 = get_pres(datas.thing[String(config.d2s[datas.snum2][2]).toInt()], 1);
+          if(now() - datas.thing_tm < 1200){
+            if(config.d2s[datas.snum2][0] == 'T') datas.dots2 = get_temp(datas.thing[String(config.d2s[datas.snum2][2]).toInt()], 1, config.ths_plc2);
+            if(config.d2s[datas.snum2][0] == 'H') datas.dots2 = get_hum(datas.thing[String(config.d2s[datas.snum2][2]).toInt()], 1, config.ths_plc2);
+            if(config.d2s[datas.snum2][0] == 'P') datas.dots2 = get_pres(datas.thing[String(config.d2s[datas.snum2][2]).toInt()], 1);
+          }
+          else{
+            if(config.d2s[datas.snum2][0] == 'T') datas.dots2 = get_temp(4040.0, 1, config.ths_plc2);
+            if(config.d2s[datas.snum2][0] == 'H') datas.dots2 = get_hum(4040.0, 1, config.ths_plc2);
+            if(config.d2s[datas.snum2][0] == 'P') datas.dots2 = get_pres(4040.0, 1);
+          }
           break;
         case 9://weather
-          if(String(config.d2s[datas.snum2]) == "T") datas.dots2 = get_temp(datas.temp_web, 1);
-          if(String(config.d2s[datas.snum2]) == "H") datas.dots2 = get_hum(datas.hum_web, 1);
-          if(String(config.d2s[datas.snum2]) == "P") datas.dots2 = get_pres(datas.pres_web, 1);
+          if(now() - datas.wet_tm < 1200){
+            if(String(config.d2s[datas.snum2]) == "T") datas.dots2 = get_temp(datas.temp_web, 1, config.wet_plc2);
+            if(String(config.d2s[datas.snum2]) == "H") datas.dots2 = get_hum(datas.hum_web, 1, config.wet_plc2);
+            if(String(config.d2s[datas.snum2]) == "P") datas.dots2 = get_pres(datas.pres_web, 1);
+          }
+          else{
+            if(String(config.d2s[datas.snum2]) == "T") datas.dots2 = get_temp(4040.0, 1, config.wet_plc2);
+            if(String(config.d2s[datas.snum2]) == "H") datas.dots2 = get_hum(4040.0, 1, config.wet_plc2);
+            if(String(config.d2s[datas.snum2]) == "P") datas.dots2 = get_pres(4040.0, 1);
+          }
           break;
         default:;; 
       }
@@ -366,14 +405,14 @@ void max7219_fill(uint8_t type1, uint8_t type2){
       0x33, 0x5B, 0x5F, 0x70, //4567
       0x7F, 0x7B, 0x63, 0x4F, //89°E
       0x67, 0x37, 0x00, 0x0F, //PH t
-      0x01, 0x4E, 0x00, 0x00  //-C
+      0x01, 0x4E, 0x3D, 0x3B  //-CdY
     },
     {
       0xFE, 0xB0, 0xED, 0xF9, //0.1.2.3.
       0xB3, 0xDB, 0xDF, 0xF0, //4.5.6.7.
       0xFF, 0xFB, 0xE3, 0xCF, //8.9.°.E.
       0xE7, 0xB7, 0x80, 0x8F, //P.H. .t.
-      0x81, 0xCE, 0x80, 0x80  //-.C. . .
+      0x81, 0xCE, 0xBD, 0xBB  //-.C.d.Y.
     },
   };
 
@@ -570,7 +609,7 @@ bool get_date(uint8_t displ){
   return 0;
 }
 
-bool get_temp(float temperature, uint8_t displ){
+bool get_temp(float temperature, uint8_t displ, uint8_t plc){
   int t = round(temperature);
   datas.clock_dig[displ][0] = datas.clock_dig[displ][6] = datas.clock_dig[displ][7] = 0x0E;
   if(t > 99 or t < -50){
@@ -584,16 +623,27 @@ bool get_temp(float temperature, uint8_t displ){
     uint8_t tl = abs(t) % 10;
     if(th == 0) th = 0x0E;
     uint8_t disp_tp = (displ == 0) ? config.disp : config.disp2;
-    datas.clock_dig[displ][1] = (disp_tp == 0 || disp_tp == 4) ? 0x0E : (t < 0) ? (t < -9) ? 0x10 : 0x0E : 0x0E;
-    datas.clock_dig[displ][2] = (disp_tp == 0 || disp_tp == 4) ? (t < 0) ? 0x10 : th : (t < 0) ? (t < -9) ? th : 0x10 : th;
-    datas.clock_dig[displ][3] = (disp_tp == 0 || disp_tp == 4) ? (t < 0) ? (t < -9) ? th : tl : tl : tl;
-    datas.clock_dig[displ][4] = (disp_tp == 0 || disp_tp == 4) ? (t < 0) ? (t < -9) ? tl : 0x0A : 0x0A : 0x0A;
-    datas.clock_dig[displ][5] = (disp_tp == 0 || disp_tp == 4) ? (t < 0) ? (t < -9) ? 0x0A : 0x11 : 0x11 : 0x11;
+    if(disp_tp == 3){
+      datas.clock_dig[displ][0] = (plc == 1) ? 0x12 : (plc == 2) ? 0x13 : 0x0E;
+      datas.clock_dig[displ][1] = 0x0E;
+      datas.clock_dig[displ][2] = (t < 0) ? (t < -9) ? 0x10 : 0x0E : 0x0E;
+      datas.clock_dig[displ][3] = (t < 0) ? (t < -9) ? th : 0x10 : th;
+      datas.clock_dig[displ][4] = tl;
+      datas.clock_dig[displ][5] = 0x0A;
+      datas.clock_dig[displ][6] = 0x11;
+    }
+    else{
+      datas.clock_dig[displ][1] = (disp_tp == 0 || disp_tp == 4) ? 0x0E : (t < 0) ? (t < -9) ? 0x10 : 0x0E : 0x0E;
+      datas.clock_dig[displ][2] = (disp_tp == 0 || disp_tp == 4) ? (t < 0) ? 0x10 : th : (t < 0) ? (t < -9) ? th : 0x10 : th;
+      datas.clock_dig[displ][3] = (disp_tp == 0 || disp_tp == 4) ? (t < 0) ? (t < -9) ? th : tl : tl : tl;
+      datas.clock_dig[displ][4] = (disp_tp == 0 || disp_tp == 4) ? (t < 0) ? (t < -9) ? tl : 0x0A : 0x0A : 0x0A;
+      datas.clock_dig[displ][5] = (disp_tp == 0 || disp_tp == 4) ? (t < 0) ? (t < -9) ? 0x0A : 0x11 : 0x11 : 0x11;
+    }
   }
   return 0;
 }
 
-bool get_hum(float humidity, uint8_t displ){
+bool get_hum(float humidity, uint8_t displ, uint8_t plc){
   uint8_t h = round(humidity);
   datas.clock_dig[displ][5] = 0x0D;
   datas.clock_dig[displ][0] = datas.clock_dig[displ][6] = datas.clock_dig[displ][7] = 0x0E;
@@ -606,6 +656,7 @@ bool get_hum(float humidity, uint8_t displ){
     uint8_t hl = h % 10;
     if(hh == 0) hh = 0x0E;
     uint8_t disp_tp = (displ == 0) ? config.disp : config.disp2;
+    datas.clock_dig[displ][0] = (disp_tp == 3) ? (plc == 1) ? 0x12 : (plc == 2) ? 0x13 : 0x0E : 0x0E;
     datas.clock_dig[displ][1] = (disp_tp == 0 || disp_tp == 4) ? 0x0E : (h > 99) ? 1 : 0x0E;
     datas.clock_dig[displ][2] = (disp_tp == 0 || disp_tp == 4) ? (h > 99) ? 1 : hh : (h > 99) ? 0 : hh;
     datas.clock_dig[displ][3] = (disp_tp == 0 || disp_tp == 4) ? (h > 99) ? 0 : hl : (h > 99) ? 0 : hl;
@@ -757,6 +808,23 @@ void read_eeprom(void){
       strlcpy(config.cityid, conf["cityid"] | config.cityid, sizeof(config.cityid));
       strlcpy(config.appid, conf["appid"] | config.appid, sizeof(config.appid));
       strlcpy(config.appkey, conf["appkey"] | config.appkey, sizeof(config.appkey));
+
+      config.bme_plc = conf["bme_plc"] | config.bme_plc;
+      config.bmp_plc = conf["bmp_plc"] | config.bmp_plc;
+      config.sht_plc = conf["sht_plc"] | config.sht_plc;
+      config.dht_plc = conf["dht_plc"] | config.dht_plc;
+      config.ds18_plc = conf["ds18_plc"] | config.ds18_plc;
+      config.ds32_plc = conf["ds32_plc"] | config.ds32_plc;
+      config.ths_plc = conf["ths_plc"] | config.ths_plc;
+      config.wet_plc = conf["wet_plc"] | config.wet_plc;
+      config.bme_plc2 = conf["bme_plc2"] | config.bme_plc2;
+      config.bmp_plc2 = conf["bmp_plc2"] | config.bmp_plc2;
+      config.sht_plc2 = conf["sht_plc2"] | config.sht_plc2;
+      config.dht_plc2 = conf["dht_plc2"] | config.dht_plc2;
+      config.ds18_plc2 = conf["ds18_plc2"] | config.ds18_plc2;
+      config.ds32_plc2 = conf["ds32_plc2"] | config.ds32_plc2;
+      config.ths_plc2 = conf["ths_plc2"] | config.ths_plc2;
+      config.wet_plc2 = conf["wet_plc2"] | config.wet_plc2;
     }
   }
   
@@ -772,24 +840,58 @@ void read_eeprom(void){
   }
 }
 
-void apMode(WiFiMode_t amode){
-  if(datas.ap_mode == false){
-    WiFi.mode(amode);
-    WiFi.softAP(config.apssid, config.appass, config.chnl);
-    datas.ap_mode = true;
+void apMode(){
+  WiFi.disconnect();
+  Serial.printf("AP Mode SSID: \"%s\" password: \"%s\"", config.apssid, config.appass);
+  IPAddress ip;
+  IPAddress subnet;
+  IPAddress gateway;
+  if(ip.fromString(config.apip) and gateway.fromString(config.apip) and subnet.fromString(config.apmask)){
+    WiFi.softAPConfig(ip, gateway, subnet);
+  }
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(config.apssid, config.appass, config.chnl);
+
+  datas.clock_dig[0][0] = datas.clock_dig[0][2] = datas.clock_dig[0][4] = datas.clock_dig[0][6] = 0x0C;
+  datas.clock_dig[0][1] = datas.clock_dig[0][3] = datas.clock_dig[0][5] = datas.clock_dig[0][7] = 0x0C;
+  datas.clock_dig[1][0] = datas.clock_dig[1][2] = datas.clock_dig[1][4] = datas.clock_dig[1][6] = 0x0C;
+  datas.clock_dig[1][1] = datas.clock_dig[1][3] = datas.clock_dig[1][5] = datas.clock_dig[1][7] = 0x0C;
+  tm1637_6D.display(datas.clock_dig[0], datas.clock_points[0]);
+  lc.setChar(0, 7, 'P', false);
+  lc.setChar(0, 6, 'P', false);
+  lc.setChar(0, 5, 'P', false);
+  lc.setChar(0, 4, 'P', false);
+  lc.setChar(0, 3, 'P', false);
+  lc.setChar(0, 2, 'P', false);
+  lc.setChar(0, 1, 'P', false);
+  lc.setChar(0, 0, 'P', false);
+  lc.setChar(1, 7, 'P', false);
+  lc.setChar(1, 6, 'P', false);
+  lc.setChar(1, 5, 'P', false);
+  lc.setChar(1, 4, 'P', false);
+  lc.setChar(1, 3, 'P', false);
+  lc.setChar(1, 2, 'P', false);
+  lc.setChar(1, 1, 'P', false);
+  lc.setChar(1, 0, 'P', false);
+  while(1){
+    webServer.handleClient();
+    yield();
+    delay(100);
   }
 }
 
 void connectToWiFi(void){
-  if(config.ssid != ""){
+  Serial.print("Connect to WiFi ");
+  if(String(config.ssid) != ""){
     uint8_t i = 0;
     WiFi.begin(config.ssid, config.pass);
     while(WiFi.status() != WL_CONNECTED){
+      Serial.print(".");
       delay(500);
-      if(i++ > 20) break;
+      if(i++ > 15) break;
     }
     if(WiFi.status() == WL_CONNECTED){
-      datas.ap_mode = false;
+      //datas.ap_mode = false;
       WiFi.setAutoConnect(true);
       WiFi.setAutoReconnect(true);
       if(config.type){
@@ -805,11 +907,12 @@ void connectToWiFi(void){
            dns2.fromString(config.dns2)
         ) WiFi.config(ip, gateway, subnet, dns1, dns2);
       }
-      Serial.print("Connected to: "); Serial.println(WiFi.SSID());
+      Serial.print("\r\nConnected to: "); Serial.println(WiFi.SSID());
       Serial.print("IP address: "); Serial.println(WiFi.localIP());
     }
+    else Serial.println(" Failed");
   }
-  else apMode(WIFI_AP);
+  //else apMode(WIFI_AP);
 }
 
 void sensors_init(void){
@@ -843,19 +946,18 @@ void sensors_init(void){
     term.requestTemperatures();
   }
     //DS3231
-  bool a, b;
-  byte c = Clock.getHour(a, b);
-  if(c >= 0 and c <= 23){
+  bool a, b, c;
+  byte hr = Clock.getHour(a, b);
+  byte mn = Clock.getMinute();
+  byte sc = Clock.getSecond();
+  byte dt = Clock.getDate();
+  byte mt = Clock.getMonth(c);
+  uint16_t yr = Clock.getYear() + 2000; 
+
+  if(hr >= 0 and hr <= 23){
     sensors.ds32_det = true;
-    bool a, b, c;
-    setTime(
-      Clock.getHour(a, b), 
-      Clock.getMinute(),
-      Clock.getSecond(), 
-      Clock.getDate(), 
-      Clock.getMonth(c), 
-      Clock.getYear() + 2000
-    );
+    Serial.printf("DS3231 time: %02d:%02d:%02d %02d-%02d-%d\r\n", hr, mn, sc, dt, mt, yr);
+    setTime(hr, mn, sc, dt, mt, yr);
   }
    //
   Serial.printf("%s %s%s\r\n", "DS3231", sensors.ds32_det ? "" : "not ", "detected");
