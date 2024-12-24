@@ -1,8 +1,8 @@
-/* Clock BIM v3.2
- * © himikat123@gmail.com, Nürnberg, Deutschland, 2019-2021 
+/* Clock BIM v3.3
+ * © himikat123@gmail.com, Nürnberg, Deutschland, 2019-2024 
  * https://github.com/himikat123/Clock
  */
-                               // Board: Generic ESP8266 Module 
+                               // Board: Generic ESP8266 Module v2.5.2
                                // 1MB (256kB SPIFFS)
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
@@ -152,6 +152,7 @@ void loop(void){
   if(WiFi.status() != WL_CONNECTED){
     datas.weather_upd = true;
     datas.thing_upd = true;
+    datas.thing_snd = true;
     connectToWiFi();
   }
   
@@ -881,6 +882,7 @@ void apMode(){
 }
 
 void connectToWiFi(void){
+  WiFi.disconnect();
   Serial.print("Connect to WiFi ");
   if(String(config.ssid) != ""){
     uint8_t i = 0;
@@ -888,7 +890,7 @@ void connectToWiFi(void){
     while(WiFi.status() != WL_CONNECTED){
       Serial.print(".");
       delay(500);
-      if(i++ > 15) break;
+      if(i++ > 30) break;
     }
     if(WiFi.status() == WL_CONNECTED){
       //datas.ap_mode = false;

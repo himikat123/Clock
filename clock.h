@@ -1,4 +1,4 @@
-String fw = "3.2";
+String fw = "3.3";
 String vers = "BIM v" + fw;
 int rssi = 0;
 File fsUploadFile;
